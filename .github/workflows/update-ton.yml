@@ -1,0 +1,51 @@
+name: Update TON Price
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-ton-price:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get TON price
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+          from datetime import datetime, timezone
+
+          url = "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd"
+          
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data = json.load(response)
+
+          price_usd = data["the-open-network"]["usd"]
+
+          result = {
+              "symbol": "TON",
+              "price_usd": price_usd,
+              "updated_at": datetime.now(timezone.utc).isoformat()
+          }
+
+          with open("ton.json", "w", encoding="utf-8") as f:
+              json.dump(result, f, ensure_ascii=False, indent=2)
+
+          print(result)
+          PY
+
+      - name: Commit updated price
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ton.json
+          git diff --cached --quiet || git commit -m "Update TON price"
+          git push
