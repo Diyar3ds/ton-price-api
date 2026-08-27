@@ -1,0 +1,61 @@
+name: tonwatch
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch
+        env:
+          TONKEY: ${{ secrets.TONCENTER_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,os,sys
+          ADDR="UQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-xkI"
+          KEY=os.environ.get("TONKEY")
+          if not KEY:
+              print("ERROR: secret TONCENTER_API_KEY not set"); sys.exit(1)
+          old=[]
+          if os.path.exists("ton_tx.json"):
+              try: old=json.load(open("ton_tx.json"))
+              except Exception: old=[]
+          seen={t.get("hash") for t in old if isinstance(t,dict)}
+          new=[]
+          lt=None
+          for page in range(5):
+              url=f"https://toncenter.com/api/v2/getTransactions?address={ADDR}&limit=100"
+              if lt: url+=f"&lt={lt}"
+              req=urllib.request.Request(url, headers={"X-API-Key":KEY})
+              try:
+                  j=json.load(urllib.request.urlopen(req, timeout=30))
+              except Exception as e:
+                  print("fetch fail", e); sys.exit(1)
+              if not j.get("ok"):
+                  print("api not ok"); sys.exit(1)
+              res=j.get("result",[])
+              if not res: break
+              for t in res:
+                  h=t.get("hash")
+                  if not h or h in seen: continue
+                  inn=t.get("in_msg") or {}
+                  if not inn.get("value"): continue
+                  new.append({"hash":h,"from":inn.get("source"),"dest":inn.get("destination"),"value":int(inn.get("value")),"comment":(inn.get("message") or "").strip(),"utime":int(t.get("utime") or 0)})
+                  lt=(t.get("transaction_id") or {}).get("lt")
+              if len(res)<100: break
+          alltx=(old+new)[-1000:]
+          json.dump(alltx,open("ton_tx.json","w"),ensure_ascii=False)
+          print("new:",len(new))
+          PY
+      - name: commit
+        run: |
+          git config user.name "tonwatch"
+          git config user.email "tonwatch@users.noreply.github.com"
+          git add ton_tx.json
+          git diff --cached --quiet || { git commit -m "ton tx"; git push; }
