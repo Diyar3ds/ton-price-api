@@ -318,5 +318,13 @@
     "value": 107572000,
     "comment": "HCAMERIZ",
     "utime": 1788304297
+  },
+  {
+    "hash": "vhvDuX6ezckk6fZ6Pe90TVqWhDDhUqdimt7k1GhPVdM=",
+    "from": "EQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-0TN",
+    "dest": "0:e1be00e1908de3073b3cc7830ef3c2634e293c8aba90a6acc7b999670a8af3fb",
+    "value": 95080000,
+    "comment": "K925NAPP",
+    "utime": 1788631727
   }
 ]
