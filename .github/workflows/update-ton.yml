@@ -8,44 +8,212 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: update-ton-price
+  cancel-in-progress: false
+
 jobs:
   update-ton-price:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Get TON price
+        env:
+          COINGECKO_DEMO_API_KEY: ${{ secrets.COINGECKO_DEMO_API_KEY }}
         run: |
           python - <<'PY'
           import json
+          import math
+          import os
+          import time
+          import urllib.error
           import urllib.request
           from datetime import datetime, timezone
+          from decimal import Decimal, InvalidOperation
+          from pathlib import Path
 
-          url = "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd"
-          
-          with urllib.request.urlopen(url, timeout=30) as response:
-              data = json.load(response)
+          API_KEY = os.environ.get("COINGECKO_DEMO_API_KEY", "").strip()
 
-          price_usd = data["the-open-network"]["usd"]
+          if not API_KEY:
+              raise RuntimeError(
+                  "COINGECKO_DEMO_API_KEY is missing from GitHub repository secrets."
+              )
+
+          URL = (
+              "https://api.coingecko.com/api/v3/simple/price"
+              "?ids=the-open-network"
+              "&vs_currencies=usd"
+              "&include_last_updated_at=true"
+          )
+
+          headers = {
+              "Accept": "application/json",
+              "User-Agent": "github-actions-ton-price/1.0",
+              "x-cg-demo-api-key": API_KEY,
+          }
+
+          data = None
+
+          for attempt in range(1, 5):
+              request = urllib.request.Request(URL, headers=headers, method="GET")
+
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      data = json.load(response)
+
+                  print(f"CoinGecko request succeeded on attempt {attempt}.")
+                  break
+
+              except urllib.error.HTTPError as exc:
+                  status = exc.code
+                  print(
+                      f"CoinGecko HTTP {status} on attempt {attempt}/4."
+                  )
+
+                  if status not in (429, 500, 502, 503, 504):
+                      raise RuntimeError(
+                          f"CoinGecko returned non-retryable HTTP {status}."
+                      ) from exc
+
+                  if attempt < 4:
+                      delay = 5 * (2 ** (attempt - 1))
+                      print(f"Retrying in {delay} seconds...")
+                      time.sleep(delay)
+
+              except (urllib.error.URLError, TimeoutError) as exc:
+                  print(
+                      f"CoinGecko network error on attempt "
+                      f"{attempt}/4: {type(exc).__name__}"
+                  )
+
+                  if attempt < 4:
+                      delay = 5 * (2 ** (attempt - 1))
+                      print(f"Retrying in {delay} seconds...")
+                      time.sleep(delay)
+
+          if data is None:
+              raise RuntimeError(
+                  "CoinGecko request failed after all retry attempts."
+              )
+
+          if not isinstance(data, dict):
+              raise RuntimeError("CoinGecko response is not a JSON object.")
+
+          coin = data.get("the-open-network")
+
+          if not isinstance(coin, dict):
+              raise RuntimeError(
+                  "CoinGecko response does not contain the-open-network."
+              )
+
+          raw_price = coin.get("usd")
+
+          try:
+              price = Decimal(str(raw_price))
+          except (InvalidOperation, TypeError, ValueError) as exc:
+              raise RuntimeError(
+                  f"Invalid TON/USD price received: {raw_price!r}"
+              ) from exc
+
+          if not price.is_finite() or price <= 0:
+              raise RuntimeError(
+                  f"Invalid TON/USD price received: {raw_price!r}"
+              )
+
+          last_updated_at = coin.get("last_updated_at")
+
+          if last_updated_at is not None:
+              try:
+                  source_ts = float(last_updated_at)
+              except (TypeError, ValueError) as exc:
+                  raise RuntimeError(
+                      "CoinGecko last_updated_at is invalid."
+                  ) from exc
+
+              if not math.isfinite(source_ts):
+                  raise RuntimeError(
+                      "CoinGecko last_updated_at is not finite."
+                  )
+
+              age = time.time() - source_ts
+
+              if age < -300:
+                  raise RuntimeError(
+                      "CoinGecko source timestamp is unexpectedly in the future."
+                  )
+
+              if age > 15 * 60:
+                  raise RuntimeError(
+                      f"CoinGecko price is stale: {int(age)} seconds old."
+                  )
+
+          path = Path("ton.json")
+          old_data = None
+
+          if path.exists():
+              try:
+                  old_data = json.loads(path.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  raise RuntimeError(
+                      f"Existing ton.json is invalid: {exc}"
+                  ) from exc
+
+          old_price = None
+
+          if isinstance(old_data, dict) and "price_usd" in old_data:
+              try:
+                  old_price = Decimal(str(old_data["price_usd"]))
+              except (InvalidOperation, TypeError, ValueError):
+                  old_price = None
+
+          if old_price is not None and old_price == price:
+              print(f"TON price unchanged: {price}")
+              print("ton.json will not be rewritten.")
+              raise SystemExit(0)
 
           result = {
               "symbol": "TON",
-              "price_usd": price_usd,
-              "updated_at": datetime.now(timezone.utc).isoformat()
+              "price_usd": float(price),
+              "updated_at": datetime.now(timezone.utc).isoformat(),
+              "source": "coingecko",
           }
 
-          with open("ton.json", "w", encoding="utf-8") as f:
-              json.dump(result, f, ensure_ascii=False, indent=2)
+          if last_updated_at is not None:
+              result["source_updated_at"] = datetime.fromtimestamp(
+                  float(last_updated_at),
+                  tz=timezone.utc
+              ).isoformat()
 
-          print(result)
+          temporary_path = Path("ton.json.tmp")
+
+          temporary_path.write_text(
+              json.dumps(
+                  result,
+                  ensure_ascii=False,
+                  indent=2,
+              ) + "\n",
+              encoding="utf-8",
+          )
+
+          os.replace(temporary_path, path)
+
+          print("New TON price written successfully:")
+          print(json.dumps(result, ensure_ascii=False, indent=2))
           PY
 
       - name: Commit updated price
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ton.json
-          git diff --cached --quiet || git commit -m "Update TON price"
-          git push
+
+          if git diff --quiet -- ton.json; then
+            echo "No price change. Nothing to commit."
+          else
+            git add ton.json
+            git commit -m "Update TON price"
+            git push
+          fi
