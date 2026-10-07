@@ -398,5 +398,13 @@
     "value": 10000,
     "comment": "@pgon - крипто-фиатный кошелек в ТГ. Пополни по СБП / выведи по СБП / Оплаты QR в магазине. Промокод - 3ABSA1BERAA8",
     "utime": 1790824933
+  },
+  {
+    "hash": "JEKBahpvVZVWraYE/SiUI6d3egMBIGTGJqw0FYDFEQI=",
+    "from": "EQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-0TN",
+    "dest": "0:e1be00e1908de3073b3cc7830ef3c2634e293c8aba90a6acc7b999670a8af3fb",
+    "value": 7533000,
+    "comment": "IW5AMDBO",
+    "utime": 1791366532
   }
 ]
