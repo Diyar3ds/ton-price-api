@@ -82,3 +82,4 @@ jobs:
           git config user.email "tonwatch@users.noreply.github.com"
           git add ton_tx.json
           git diff --cached --quiet || { git commit -m "ton tx"; git push; }
+ 
