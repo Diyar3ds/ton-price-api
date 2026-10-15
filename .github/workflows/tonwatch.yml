@@ -3,6 +3,15 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      wallet_address:
+        description: "TON wallet address to scan (usually passed by the bot)"
+        required: false
+        type: string
+        default: "UQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-xkI"
+concurrency:
+  group: tonwatch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
@@ -13,11 +22,12 @@ jobs:
       - name: fetch
         env:
           TONKEY: ${{ secrets.TONCENTER_API_KEY }}
+          TON_WALLET_ADDRESS: ${{ github.event.inputs.wallet_address || vars.TON_WALLET_ADDRESS }}
         run: |
           python3 - <<'PY'
           import base64, json, os, sys, urllib.request
           from urllib.parse import urlencode
-          ADDR = "UQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-xkI"
+          ADDR = (os.environ.get("TON_WALLET_ADDRESS") or "UQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-xkI").strip()
           KEY = os.environ.get("TONKEY")
           if not KEY:
               print("ERROR: secret TONCENTER_API_KEY not set")
@@ -33,6 +43,9 @@ jobs:
                   return f"{wc}:{b[2:34].hex().lower()}"
               except Exception: return addr.lower()
           target = to_raw(ADDR)
+          if not target or ":" not in target:
+              print("ERROR: TON_WALLET_ADDRESS is invalid")
+              sys.exit(1)
           old = []
           try:
               with open("ton_tx.json", encoding="utf-8") as f: old = json.load(f)
