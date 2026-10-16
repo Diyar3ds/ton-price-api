@@ -486,5 +486,13 @@
     "value": 8500000,
     "comment": "",
     "utime": 1792086277
+  },
+  {
+    "hash": "0Iv/+Oh6KKdHEm8ZxraHeivPjDtjr+T1Z4ohCcpnrWQ=",
+    "from": "EQDhvgDhkI3jBzs8x4MO88JjTik8irqQpqzHuZlnCorz-0TN",
+    "dest": "0:e1be00e1908de3073b3cc7830ef3c2634e293c8aba90a6acc7b999670a8af3fb",
+    "value": 8100000,
+    "comment": "CLP3Y95L",
+    "utime": 1792145424
   }
 ]
