@@ -654,5 +654,13 @@
     "value": 1,
     "comment": "@GramFloodingBot — advertise to 100K+ active wallets or flood one address.\nPersonal address for every client ⚡️",
     "utime": 1792704097
+  },
+  {
+    "hash": "irqTm4D0tl+FzweN5mZpQA9G8P2k8PBSjX2bDfnsFU4=",
+    "from": "EQABTruiipbnmqdcvN9_IJu-zn3QiyBP0qqNBCWrB1wONscj",
+    "dest": "0:e1be00e1908de3073b3cc7830ef3c2634e293c8aba90a6acc7b999670a8af3fb",
+    "value": 980000000,
+    "comment": "QXFTTLP2",
+    "utime": 1792749376
   }
 ]
